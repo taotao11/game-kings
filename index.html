@@ -46,29 +46,59 @@ let world={grain:62,morale:58,prestige:43,tension:51};
 const logs=[];
 const $=id=>document.getElementById(id);
 function score(n){
- const t=n.traits;
- const danger=world.tension;
+ const t=n.traits,d=world.tension,me=n.links&&n.links.zhao||0;
  const options=[
-  ["扩张军权",t.ambition*.55+t.courage*.2+t.loyalty*.15-danger*.18],
-  ["暂时蛰伏",t.caution*.45+t.loyalty*.25+(100-t.ambition)*.2+(100-danger)*.1],
-  ["谋求利益",t.greed*.6+t.ambition*.25+(100-t.loyalty)*.15],
-  ["主动示好",t.loyalty*.45+t.caution*.25+(100-t.ambition)*.1+(100-danger)*.2]
+  ["扩张军权",t.ambition*.48+t.courage*.22+(100-t.caution)*.18+d*.16+(me<0?12:0)],
+  ["谨慎蛰伏",t.caution*.5+t.loyalty*.2+(100-t.ambition)*.18+(100-d)*.12],
+  ["谋求私利",t.greed*.5+t.ambition*.25+(100-t.loyalty)*.15+(me<0?10:0)],
+  ["主动结盟",t.loyalty*.25+t.caution*.3+(100-t.ambition)*.18+(100-d)*.18+(me>15?12:0)],
+  ["试探强者",t.courage*.18+t.caution*.18+t.ambition*.25+(d>60?18:0)+Math.random()*12]
  ];
  options.sort((a,b)=>b[1]-a[1]);return options[0][0];
 }
+function relation(a,b){
+ if(!a.links)a.links={}; return a.links[b.id]??0;
+}
+function changeRelation(a,b,delta){
+ if(!a.links)a.links={};a.links[b.id]=Math.max(-100,Math.min(100,relation(a,b)+delta));
+}
+function chooseTarget(n){
+ const candidates=npcs.filter(x=>x.id!==n.id);
+ candidates.sort((a,b)=>Math.abs(relation(n,b))-Math.abs(relation(n,a)));
+ return candidates[Math.floor(Math.random()*Math.min(4,candidates.length))];
+}
 function autonomous(){
  npcs.filter(n=>n.id!=="zhao").forEach(n=>{
-  let action=score(n);
+  const action=score(n),target=chooseTarget(n);
   let text="";
-  if(action==="扩张军权"){world.morale=Math.max(0,world.morale-2);world.tension=Math.min(100,world.tension+4);n.trust=Math.max(0,n.trust-1);text=n.name+"开始调动亲信，扩大自己的军中影响力。";}
-  if(action==="暂时蛰伏"){world.tension=Math.max(0,world.tension-2);n.trust=Math.min(100,n.trust+2);text=n.name+"没有出手，反而把注意力放回自己的事务。";}
-  if(action==="谋求利益"){world.grain=Math.max(0,world.grain-1);n.trust=Math.max(0,n.trust-3);text=n.name+"暗中为自己争取利益，军中开始出现流言。";}
-  if(action==="主动示好"){n.trust=Math.min(100,n.trust+3);world.prestige=Math.min(100,world.prestige+1);text=n.name+"主动释放善意，试图寻找可靠的盟友。";}
-  addLog(text);
+  if(action==="扩张军权"){
+   world.morale=Math.max(0,world.morale-2);world.tension=Math.min(100,world.tension+4);
+   changeRelation(n,npcs.find(x=>x.id==="zhao"),-2);
+   text=n.name+"调动亲信扩大军中影响力，"+target.name+"开始警惕。";
+  }
+  if(action==="暂时蛰伏"){
+   world.tension=Math.max(0,world.tension-2);n.trust=Math.min(100,n.trust+1);
+   text=n.name+"选择蛰伏，把资源藏起来观察别人先动。";
+  }
+  if(action==="谋求私利"){
+   world.grain=Math.max(0,world.grain-2);n.trust=Math.max(0,n.trust-3);
+   changeRelation(n,npcs.find(x=>x.id==="zhao"),-4);
+   text=n.name+"暗中为自己争取利益，并刻意隐藏真实意图。";
+  }
+  if(action==="主动结盟"){
+   changeRelation(n,target,10);changeRelation(target,n,6);world.prestige=Math.min(100,world.prestige+1);
+   text=n.name+"主动接近"+target.name+"，提出结盟试探。";
+  }
+  if(action==="试探强者"){
+   changeRelation(n,target,-3);n.memory=n.memory||[];n.memory.unshift("第"+turn+"回合试探了"+target.name);
+   text=n.name+"派人试探"+target.name+"的底线，没有直接下注。";
+  }
+  n.memory=n.memory||[];n.memory.unshift("第"+turn+"回合："+action);n.memory=n.memory.slice(0,6);
+  addLog(n.name+"【"+action+"】 → "+text);
  });
 }
 function addLog(text){logs.unshift({turn,text});renderLog()}
-function nextTurn(){turn++;autonomous();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：北方局势出现新的不确定性。");}renderWorld();renderNpcs();renderDetail()}
+function nextTurn(){turn++;autonomous();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
 function playerAction(a){
 const n=npcs.find(x=>x.id===selected);if(!n)return;
 if(a==="赏赐"){n.trust=Math.min(100,n.trust+12);world.grain=Math.max(0,world.grain-5);addLog("赵匡胤赏赐"+n.name+"，但对方究竟把这当成恩义，还是把它看成一次交易？");}
@@ -79,7 +109,7 @@ renderWorld();renderNpcs();renderDetail()}
 function renderWorld(){$("world").innerHTML=[["粮草",world.grain],["军心",world.morale],["威望",world.prestige],["天下紧张",world.tension]].map(x=>`<div class="stat"><b>${x[1]}</b><span>${x[0]}</span></div>`).join("")}
 function renderNpcs(){$("npcs").innerHTML=npcs.map(n=>`<div class="npc ${selected===n.id?"active":""}" onclick="selected='${n.id}';renderNpcs();renderDetail()"><div class="npc-top"><strong>${n.name}</strong><span class="tag">${n.faction} · ${n.role}</span></div><div class="tag">${n.personality}</div><div class="meter"><i style="width:${n.trust}%"></i></div></div>`).join("")}
 function renderLog(){$("log").innerHTML=logs.map(l=>`<div class="event"><div class="turn">第 ${l.turn} 回合</div><p>${l.text}</p></div>`).join("")}
-function renderDetail(){let n=npcs.find(x=>x.id===selected);$("detail").innerHTML=`<div class="big">${n.name}</div><div class="tag">${n.faction} · ${n.role}</div><div class="quote">“${n.quote}”</div><p><b>性格：</b>${n.personality}</p><p><b>当前目标：</b>${n.goal}</p><p><b>对你的信任：</b>${n.trust}/100</p><div class="stats">${Object.entries(n.traits).map(([k,v])=>`<div class="stat"><b>${v}</b><span>${({ambition:"野心",loyalty:"忠诚",greed:"贪欲",courage:"勇气",caution:"谨慎"})[k]}</span></div>`).join("")}</div><div class="actions"><button onclick="playerAction('赏赐')">赏赐</button><button onclick="playerAction('试探')">试探</button><button onclick="playerAction('拉拢')">拉拢</button><button onclick="playerAction('施压')">施压</button></div>`}
+function renderDetail(){let n=npcs.find(x=>x.id===selected);$("detail").innerHTML=`<div class="big">${n.name}</div><div class="tag">${n.faction} · ${n.role}</div><div class="quote">“${n.quote}”</div><p><b>性格：</b>${n.personality}</p><p><b>当前目标：</b>${n.goal}</p><p><b>对你的信任：</b>${n.trust}/100</p><p><b>最近记忆：</b>${n.memory&&n.memory.length?n.memory[0]:"暂无"}</p><div class="stats">${Object.entries(n.traits).map(([k,v])=>`<div class="stat"><b>${v}</b><span>${({ambition:"野心",loyalty:"忠诚",greed:"贪欲",courage:"勇气",caution:"谨慎"})[k]}</span></div>`).join("")}</div><div class="actions"><button onclick="playerAction('赏赐')">赏赐</button><button onclick="playerAction('试探')">试探</button><button onclick="playerAction('拉拢')">拉拢</button><button onclick="playerAction('施压')">施压</button></div>`}
 addLog("天下风雨未定。赵匡胤开始观察身边每一个人的选择。");renderWorld();renderNpcs();renderLog();renderDetail();
 </script>
 </body></html>
