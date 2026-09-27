@@ -21,7 +21,7 @@ main{max-width:1250px;margin:22px auto;padding:0 18px}.grid{display:grid;grid-te
 </style>
 </head>
 <body>
-<header><div><h1>五代十国 · 群雄自决</h1><div class="sub">洛阳之外，天下并不等你下令。</div></div><button onclick="nextTurn()">推进一回合</button></header>
+<header><div><h1>五代十国 · 群雄自决</h1><div class="sub">洛阳之外，天下并不等你下令。</div></div><div><button onclick="saveGame()">保存</button> <button onclick="loadGame()">读取</button> <button onclick="nextTurn()">推进一回合</button></div></header>
 <main>
 <div class="notice">实验规则：你是赵匡胤。其他人物会根据自己的性格、关系、利益与恐惧自行行动。你只能影响他们，不能完全控制他们。</div>
 <div class="grid">
@@ -52,7 +52,8 @@ function score(n){
   ["谨慎蛰伏",t.caution*.5+t.loyalty*.2+(100-t.ambition)*.18+(100-d)*.12],
   ["谋求私利",t.greed*.5+t.ambition*.25+(100-t.loyalty)*.15+(me<0?10:0)],
   ["主动结盟",t.loyalty*.25+t.caution*.3+(100-t.ambition)*.18+(100-d)*.18+(me>15?12:0)],
-  ["试探强者",t.courage*.18+t.caution*.18+t.ambition*.25+(d>60?18:0)+Math.random()*12]
+  ["试探强者",t.courage*.18+t.caution*.18+t.ambition*.25+(d>60?18:0)+Math.random()*12],
+  ["秘密结党",t.ambition*.34+(100-t.loyalty)*.28+t.caution*.18+(me<0?18:0)+(d>70?12:0)]
  ];
  options.sort((a,b)=>b[1]-a[1]);return options[0][0];
 }
@@ -115,6 +116,14 @@ function autonomous(){
  });
 }
 function addLog(text){logs.unshift({turn,text});renderLog()}
+function saveGame(){
+ localStorage.setItem("gameKingsSave",JSON.stringify({npcs,world,turn,day,logs,seed:Date.now()%999999}));
+ addLog("【存档】乱世局势已经记录。");
+}
+function loadGame(){
+ const raw=localStorage.getItem("gameKingsSave");if(!raw){addLog("【存档】尚未找到可恢复的局势。");return;}
+ try{const s=JSON.parse(raw);Object.assign(world,s.world);turn=s.turn;day=s.day;logs.splice(0,logs.length,...s.logs);npcs.splice(0,npcs.length,...s.npcs);seed=s.seed||927;addLog("【存档】旧日局势重新浮现。");renderAll();}catch(e){addLog("【存档】存档损坏，已保留当前局势。");}
+}
 function nextTurn(){turn++;day++;autonomous();worldEvent();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
 function playerAction(a){
 const n=npcs.find(x=>x.id===selected);if(!n)return;
