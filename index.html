@@ -25,7 +25,7 @@ main{max-width:1250px;margin:22px auto;padding:0 18px}.grid{display:grid;grid-te
 <main>
 <div class="notice">实验规则：你是赵匡胤。其他人物会根据自己的性格、关系、利益与恐惧自行行动。你只能影响他们，不能完全控制他们。</div>
 <div class="grid">
-<section class="panel"><h2>天下局势</h2><div class="stats" id="world"></div><h2 style="margin-top:18px">势力网络</h2><div id="factions"></div><h2 style="margin-top:18px">城池与军队</h2><div id="cities"></div><h2 style="margin-top:18px">战场态势</h2><div id="battles"></div><h2 style="margin-top:18px">权力危机</h2><div id="crisis"></div><h2 style="margin-top:18px">事件链</h2><div id="chains"></div><h2 style="margin-top:18px">情报与传闻</h2><div id="rumors"></div><h2 style="margin-top:18px">人物成长</h2><div id="growth"></div><h2 style="margin-top:18px">人物</h2><div id="npcs"></div></section>
+<section class="panel"><h2>天下局势</h2><div class="stats" id="world"></div><h2 style="margin-top:18px">势力网络</h2><div id="factions"></div><h2 style="margin-top:18px">城池与军队</h2><div id="cities"></div><h2 style="margin-top:18px">战场态势</h2><div id="battles"></div><h2 style="margin-top:18px">权力危机</h2><div id="crisis"></div><h2 style="margin-top:18px">事件链</h2><div id="chains"></div><h2 style="margin-top:18px">情报与传闻</h2><div id="rumors"></div><h2 style="margin-top:18px">人物成长</h2><div id="growth"></div><h2 style="margin-top:18px">野心与底线</h2><div id="goals"></div><h2 style="margin-top:18px">人物</h2><div id="npcs"></div></section>
 <section class="panel"><h2>天下纪事</h2><div id="log"></div></section>
 <section class="panel detail" id="detail"></section>
 </div>
@@ -53,6 +53,32 @@ let battles=[];
 let mutinyRisk=18;
 let eventChains=[];
 let rumors=[];
+function initGoals(n){
+ if(n.goalState)return;
+ n.goalState={long:n.goal||"扩大自身影响力",stage:"积累力量",progress:0,redLine:n.traits.loyalty<45?"自身安全":"核心派系利益",betrayal:0};
+}
+function goalTurn(){
+ npcs.forEach(initGoals);
+ npcs.forEach(n=>{
+  const g=n.goalState;
+  const z=findNpc("赵匡胤"),r=z?relation(n,z):0;
+  let gain=n.traits.ambition*.06;
+  if(r<0)gain+=Math.abs(r)*.04;
+  if(world.grain<25&&n.traits.greed>50)gain+=2;
+  g.progress=Math.min(100,Math.round(g.progress+gain));
+  if(g.progress>35&&g.stage==="积累力量"){g.stage="寻找盟友";addLog("【野心】"+n.name+"开始主动寻找能帮助自己实现目标的人。");}
+  if(g.progress>65&&g.stage==="寻找盟友"){g.stage="施加影响";addLog("【野心】"+n.name+"开始尝试把自己的意志影响到派系。");}
+  if(g.progress>88&&r<-50){g.stage="考虑翻脸";g.betrayal=Math.min(100,g.betrayal+8);addLog("【底线】"+n.name+"认为赵匡胤已经触碰自己的核心利益。");}
+  if(g.stage==="考虑翻脸"&&g.betrayal>45&&Math.random()<.2){
+    changeRelation(n,z,-10);world.tension=Math.min(100,world.tension+7);
+    n.memory=(n.memory||[]);n.memory.unshift("第"+turn+"回合：因核心利益受到威胁，开始考虑脱离现有秩序。");n.memory=n.memory.slice(0,6);
+    addLog("【暗流】"+n.name+"开始秘密寻找新的政治退路。");
+  }
+ });
+}
+function renderGoals(){
+ $("goals").innerHTML=npcs.map(n=>{initGoals(n);const g=n.goalState;return `<div class="npc"><div class="npc-top"><strong>${n.name}</strong><span class="tag">${g.stage}</span></div><div class="tag">长期目标：${g.long}</div><div class="tag">目标进度：${g.progress}% · 底线：${g.redLine} · 翻脸倾向：${g.betrayal}</div><div class="meter"><i style="width:${g.progress}%"></i></div></div>`}).join("");
+}
 function evolveNpc(n){
  n.memory=n.memory||[];
  n.ageState=n.ageState||{wins:0,losses:0,betrayals:0,gifts:0};
@@ -330,7 +356,7 @@ function loadGame(){
  const raw=localStorage.getItem("gameKingsSave");if(!raw){addLog("【存档】尚未找到可恢复的局势。");return;}
  try{const s=JSON.parse(raw);Object.assign(world,s.world);turn=s.turn;day=s.day;logs.splice(0,logs.length,...s.logs);npcs.splice(0,npcs.length,...s.npcs);seed=s.seed||927;addLog("【存档】旧日局势重新浮现。");renderAll();}catch(e){addLog("【存档】存档损坏，已保留当前局势。");}
 }
-function nextTurn(){turn++;day++;autonomous();factionTurn();armyTurn();warTurn();politicalTurn();chainTurn();rumorTurn();growthTurn();worldEvent();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
+function nextTurn(){turn++;day++;autonomous();factionTurn();armyTurn();warTurn();politicalTurn();chainTurn();rumorTurn();growthTurn();goalTurn();worldEvent();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
 function playerAction(a){
 const n=npcs.find(x=>x.id===selected);if(!n)return;
 if(a==="赏赐"){n.trust=Math.min(100,n.trust+12);world.grain=Math.max(0,world.grain-5);addLog("赵匡胤赏赐"+n.name+"，但对方究竟把这当成恩义，还是把它看成一次交易？");}
@@ -344,7 +370,7 @@ function renderFactions(){
 function renderWorld(){$("world").innerHTML=[["粮草",world.grain],["军心",world.morale],["威望",world.prestige],["天下紧张",world.tension]].map(x=>`<div class="stat"><b>${x[1]}</b><span>${x[0]}</span></div>`).join("")}
 function renderNpcs(){$("npcs").innerHTML=npcs.map(n=>`<div class="npc ${selected===n.id?"active":""}" onclick="selected='${n.id}';renderNpcs();renderDetail()"><div class="npc-top"><strong>${n.name}</strong><span class="tag">${n.faction} · ${n.role}</span></div><div class="tag">${n.personality}</div><div class="meter"><i style="width:${n.trust}%"></i></div></div>`).join("")}
 function renderLog(){$("log").innerHTML=logs.map(l=>`<div class="event"><div class="turn">第 ${l.turn} 回合</div><p>${l.text}</p></div>`).join("")}
-function renderAll(){renderWorld();renderFactions();renderCities();renderBattles();renderCrisis();renderChains();renderRumors();renderGrowth();renderNpcs();renderLog();renderDetail();}
+function renderAll(){renderWorld();renderFactions();renderCities();renderBattles();renderCrisis();renderChains();renderRumors();renderGrowth();renderGoals();renderNpcs();renderLog();renderDetail();}
 function renderDetail(){let n=npcs.find(x=>x.id===selected);$("detail").innerHTML=`<div class="big">${n.name}</div><div class="tag">${n.faction} · ${n.role}</div><div class="quote">“${n.quote}”</div><p><b>性格：</b>${n.personality}</p><p><b>当前目标：</b>${n.goal}</p><p><b>对你的信任：</b>${n.trust}/100</p><p><b>最近记忆：</b>${n.memory&&n.memory.length?n.memory[0]:"暂无"}</p><div class="stats">${Object.entries(n.traits).map(([k,v])=>`<div class="stat"><b>${v}</b><span>${({ambition:"野心",loyalty:"忠诚",greed:"贪欲",courage:"勇气",caution:"谨慎"})[k]}</span></div>`).join("")}</div><div class="actions"><button onclick="playerAction('赏赐')">赏赐</button><button onclick="playerAction('试探')">试探</button><button onclick="playerAction('拉拢')">拉拢</button><button onclick="playerAction('施压')">施压</button></div>`}
 addLog("天下风雨未定。赵匡胤开始观察身边每一个人的选择。");renderAll();
 </script>
