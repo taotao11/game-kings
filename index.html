@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>五代十国 · 群雄自决</title>
+<style>
+:root{--bg:#0d1015;--panel:#171b23;--panel2:#202632;--line:#303846;--text:#e8e2d5;--muted:#9da5b3;--gold:#d7ad62;--red:#b95f55;--green:#6fa77b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% 0,#20232b 0,#0d1015 55%);color:var(--text);font-family:system-ui,"Microsoft YaHei",sans-serif}
+header{padding:22px 28px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:#101319dd;position:sticky;top:0;z-index:2}
+h1{font-family:serif;margin:0;font-size:25px;letter-spacing:3px}.sub{color:var(--muted);font-size:13px;margin-top:5px}
+button{border:1px solid #5b4a2c;background:#282217;color:#e8d4aa;padding:9px 14px;border-radius:7px;cursor:pointer}button:hover{background:#3a301f}
+main{max-width:1250px;margin:22px auto;padding:0 18px}.grid{display:grid;grid-template-columns:1.15fr 1.6fr 1fr;gap:16px}
+.panel{background:linear-gradient(145deg,#181c24,#12151b);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 12px 30px #0005}.panel h2{font-size:15px;color:var(--gold);margin:0 0 13px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.stat{background:var(--panel2);padding:11px;border-radius:8px}.stat b{display:block;font-size:18px}.stat span{font-size:12px;color:var(--muted)}
+#npcs{display:grid;gap:8px;max-height:520px;overflow:auto}.npc{padding:11px;background:#1d222b;border:1px solid #2c3340;border-radius:8px;cursor:pointer}.npc.active{border-color:var(--gold);box-shadow:0 0 0 1px #d7ad6233}.npc-top{display:flex;justify-content:space-between}.tag{font-size:11px;color:#c8b38a}.meter{height:5px;background:#0c0f13;border-radius:5px;margin-top:8px;overflow:hidden}.meter i{display:block;height:100%;background:var(--gold)}
+#log{height:390px;overflow:auto;display:flex;flex-direction:column;gap:9px}.event{border-left:2px solid #6c5937;padding:7px 10px;background:#151920}.turn{font-size:11px;color:var(--gold)}.event p{margin:4px 0;font-size:13px;line-height:1.55}
+.detail{min-height:390px}.big{font-family:serif;font-size:23px;margin-bottom:4px}.quote{color:#c8c1b5;font-style:italic;line-height:1.6;margin:15px 0}.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}
+.notice{margin-bottom:15px;padding:11px 14px;border:1px solid #403824;background:#17150f;color:#d9c49a;border-radius:8px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.detail{min-height:0}}
+</style>
+</head>
+<body>
+<header><div><h1>五代十国 · 群雄自决</h1><div class="sub">洛阳之外，天下并不等你下令。</div></div><button onclick="nextTurn()">推进一回合</button></header>
+<main>
+<div class="notice">实验规则：你是赵匡胤。其他人物会根据自己的性格、关系、利益与恐惧自行行动。你只能影响他们，不能完全控制他们。</div>
+<div class="grid">
+<section class="panel"><h2>天下局势</h2><div class="stats" id="world"></div><h2 style="margin-top:18px">人物</h2><div id="npcs"></div></section>
+<section class="panel"><h2>天下纪事</h2><div id="log"></div></section>
+<section class="panel detail" id="detail"></section>
+</div>
+</main>
+<script>
+const npcs=[
+{id:"guo",name:"郭威",faction:"后周",role:"天子",personality:"沉稳、果断、疑心重",traits:{ambition:72,loyalty:76,greed:32,courage:82,caution:65},goal:"稳住新朝，防止藩镇坐大",trust:55,quote:"朕不怕兵少，只怕人心先散。"},
+{id:"shi",name:"史弘肇",faction:"后周",role:"宿将",personality:"强硬、重军功、少耐心",traits:{ambition:64,loyalty:71,greed:40,courage:91,caution:28},goal:"扩军立功，压住潜在的叛乱",trust:61,quote:"军中说话，不靠漂亮话。"},
+{id:"wang",name:"王朴",faction:"后周",role:"谋臣",personality:"理性、谨慎、长远",traits:{ambition:48,loyalty:84,greed:22,courage:53,caution:88},goal:"积蓄国力，等待统一机会",trust:67,quote:"天下不是一场仗打下来的。"},
+{id:"han",name:"韩通",faction:"后周",role:"将领",personality:"忠直、骄傲、好胜",traits:{ambition:58,loyalty:79,greed:28,courage:86,caution:35},goal:"证明自己不逊于任何宿将",trust:49,quote:"若要退，我韩通宁可死在阵前。"},
+{id:"li",name:"李重进",faction:"后周",role:"禁军将领",personality:"骄傲、多疑、现实",traits:{ambition:79,loyalty:43,greed:51,courage:80,caution:61},goal:"扩大自己的军中势力",trust:39,quote:"功劳是我的，为什么位置不是？"},
+{id:"zhao",name:"赵匡胤",faction:"后周",role:"殿前都点检",personality:"克制、善察人心、野心深藏",traits:{ambition:88,loyalty:63,greed:36,courage:85,caution:72},goal:"积累军心与威望，等待真正的机会",trust:100,quote:"现在还不是时候。"},
+{id:"liu",name:"刘承祐",faction:"后汉",role:"旧部势力",personality:"急躁、敏感、缺乏安全感",traits:{ambition:70,loyalty:52,greed:44,courage:48,caution:39},goal:"保住自己的势力与性命",trust:27,quote:"别人都在等我倒下。"},
+{id:"nan",name:"南唐使者",faction:"南唐",role:"使者",personality:"圆滑、谨慎、机会主义",traits:{ambition:61,loyalty:58,greed:67,courage:31,caution:91},goal:"探清后周底线，争取喘息时间",trust:35,quote:"刀兵之外，总还有一条路。"}
+];
+let selected="zhao",turn=1;
+let world={grain:62,morale:58,prestige:43,tension:51};
+const logs=[];
+const $=id=>document.getElementById(id);
+function score(n){
+ const t=n.traits;
+ const danger=world.tension;
+ const options=[
+  ["扩张军权",t.ambition*.55+t.courage*.2+t.loyalty*.15-danger*.18],
+  ["暂时蛰伏",t.caution*.45+t.loyalty*.25+(100-t.ambition)*.2+(100-danger)*.1],
+  ["谋求利益",t.greed*.6+t.ambition*.25+(100-t.loyalty)*.15],
+  ["主动示好",t.loyalty*.45+t.caution*.25+(100-t.ambition)*.1+(100-danger)*.2]
+ ];
+ options.sort((a,b)=>b[1]-a[1]);return options[0][0];
+}
+function autonomous(){
+ npcs.filter(n=>n.id!=="zhao").forEach(n=>{
+  let action=score(n);
+  let text="";
+  if(action==="扩张军权"){world.morale=Math.max(0,world.morale-2);world.tension=Math.min(100,world.tension+4);n.trust=Math.max(0,n.trust-1);text=n.name+"开始调动亲信，扩大自己的军中影响力。";}
+  if(action==="暂时蛰伏"){world.tension=Math.max(0,world.tension-2);n.trust=Math.min(100,n.trust+2);text=n.name+"没有出手，反而把注意力放回自己的事务。";}
+  if(action==="谋求利益"){world.grain=Math.max(0,world.grain-1);n.trust=Math.max(0,n.trust-3);text=n.name+"暗中为自己争取利益，军中开始出现流言。";}
+  if(action==="主动示好"){n.trust=Math.min(100,n.trust+3);world.prestige=Math.min(100,world.prestige+1);text=n.name+"主动释放善意，试图寻找可靠的盟友。";}
+  addLog(text);
+ });
+}
+function addLog(text){logs.unshift({turn,text});renderLog()}
+function nextTurn(){turn++;autonomous();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：北方局势出现新的不确定性。");}renderWorld();renderNpcs();renderDetail()}
+function playerAction(a){
+const n=npcs.find(x=>x.id===selected);if(!n)return;
+if(a==="赏赐"){n.trust=Math.min(100,n.trust+12);world.grain=Math.max(0,world.grain-5);addLog("赵匡胤赏赐"+n.name+"，但对方究竟把这当成恩义，还是把它看成一次交易？");}
+if(a==="试探"){addLog("赵匡胤试探"+n.name+"的态度。对方没有把真正的想法说出来。");world.tension=Math.min(100,world.tension+1);}
+if(a==="拉拢"){n.trust=Math.min(100,n.trust+7);world.prestige=Math.min(100,world.prestige+2);addLog(n.name+"接受了赵匡胤的善意，但是否因此改变自己的长期目标，仍然未知。");}
+if(a==="施压"){n.trust=Math.max(0,n.trust-15);world.tension=Math.min(100,world.tension+5);addLog("赵匡胤向"+n.name+"施压。对方表面低头，心中却记下了这笔账。");}
+renderWorld();renderNpcs();renderDetail()}
+function renderWorld(){$("world").innerHTML=[["粮草",world.grain],["军心",world.morale],["威望",world.prestige],["天下紧张",world.tension]].map(x=>`<div class="stat"><b>${x[1]}</b><span>${x[0]}</span></div>`).join("")}
+function renderNpcs(){$("npcs").innerHTML=npcs.map(n=>`<div class="npc ${selected===n.id?"active":""}" onclick="selected='${n.id}';renderNpcs();renderDetail()"><div class="npc-top"><strong>${n.name}</strong><span class="tag">${n.faction} · ${n.role}</span></div><div class="tag">${n.personality}</div><div class="meter"><i style="width:${n.trust}%"></i></div></div>`).join("")}
+function renderLog(){$("log").innerHTML=logs.map(l=>`<div class="event"><div class="turn">第 ${l.turn} 回合</div><p>${l.text}</p></div>`).join("")}
+function renderDetail(){let n=npcs.find(x=>x.id===selected);$("detail").innerHTML=`<div class="big">${n.name}</div><div class="tag">${n.faction} · ${n.role}</div><div class="quote">“${n.quote}”</div><p><b>性格：</b>${n.personality}</p><p><b>当前目标：</b>${n.goal}</p><p><b>对你的信任：</b>${n.trust}/100</p><div class="stats">${Object.entries(n.traits).map(([k,v])=>`<div class="stat"><b>${v}</b><span>${({ambition:"野心",loyalty:"忠诚",greed:"贪欲",courage:"勇气",caution:"谨慎"})[k]}</span></div>`).join("")}</div><div class="actions"><button onclick="playerAction('赏赐')">赏赐</button><button onclick="playerAction('试探')">试探</button><button onclick="playerAction('拉拢')">拉拢</button><button onclick="playerAction('施压')">施压</button></div>`}
+addLog("天下风雨未定。赵匡胤开始观察身边每一个人的选择。");renderWorld();renderNpcs();renderLog();renderDetail();
+</script>
+</body></html>
