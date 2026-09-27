@@ -25,7 +25,7 @@ main{max-width:1250px;margin:22px auto;padding:0 18px}.grid{display:grid;grid-te
 <main>
 <div class="notice">实验规则：你是赵匡胤。其他人物会根据自己的性格、关系、利益与恐惧自行行动。你只能影响他们，不能完全控制他们。</div>
 <div class="grid">
-<section class="panel"><h2>天下局势</h2><div class="stats" id="world"></div><h2 style="margin-top:18px">势力网络</h2><div id="factions"></div><h2 style="margin-top:18px">城池与军队</h2><div id="cities"></div><h2 style="margin-top:18px">战场态势</h2><div id="battles"></div><h2 style="margin-top:18px">人物</h2><div id="npcs"></div></section>
+<section class="panel"><h2>天下局势</h2><div class="stats" id="world"></div><h2 style="margin-top:18px">势力网络</h2><div id="factions"></div><h2 style="margin-top:18px">城池与军队</h2><div id="cities"></div><h2 style="margin-top:18px">战场态势</h2><div id="battles"></div><h2 style="margin-top:18px">权力危机</h2><div id="crisis"></div><h2 style="margin-top:18px">人物</h2><div id="npcs"></div></section>
 <section class="panel"><h2>天下纪事</h2><div id="log"></div></section>
 <section class="panel detail" id="detail"></section>
 </div>
@@ -50,6 +50,34 @@ let cities=[
  {id:"jinyang",name:"晋阳",owner:"后汉残余",grain:61,garrison:31,commander:"刘承祐",roads:["kaifeng"]}
 ];
 let battles=[];
+let mutinyRisk=18;
+function updatePoliticalAfterBattle(){
+ const z=findNpc("赵匡胤"),li=findNpc("李重进"),han=findNpc("韩通");
+ if(!z)return;
+ const army=armies.find(a=>a.commander==="赵匡胤");
+ const guardPower=factions.guards.power;
+ mutinyRisk=Math.max(0,Math.min(100,Math.round(
+  12+(army?(100-army.morale)*.35:0)+(100-z.traits.loyalty)*.18+
+  (guardPower>65?(guardPower-65)*.55:0)+(li?.traits.ambition||0)*.12+
+  (li&&relation(li,z)<0?Math.abs(relation(li,z))*.18:0)+world.tension*.16
+  -(z.traits.caution>65?8:0)
+ )));
+}
+function politicalTurn(){
+ updatePoliticalAfterBattle();
+ const z=findNpc("赵匡胤"),li=findNpc("李重进");
+ if(mutinyRisk>65&&Math.random()<.22){
+  world.tension=Math.min(100,world.tension+8);
+  if(li)changeRelation(li,z,-8);
+  addLog("【权力危机】禁军中开始流传对赵匡胤不利的议论，陈桥兵变风险上升。");
+ } else if(mutinyRisk<30&&Math.random()<.18){
+  world.prestige=Math.min(100,world.prestige+2);
+  addLog("【政治稳定】禁军秩序良好，赵匡胤的军中威望得到巩固。");
+ }
+}
+function renderCrisis(){
+ $("crisis").innerHTML=`<div class="npc"><div class="npc-top"><strong>陈桥兵变风险</strong><span class="tag">${mutinyRisk}/100</span></div><div class="meter"><i style="width:${mutinyRisk}%"></i></div><div class="tag">风险来源：禁军势力、赵匡胤军心、李重进态度、天下紧张度、军队士气</div></div>`;
+}
 function findNpc(name){return npcs.find(n=>n.name===name)}
 function armyDecision(a){
  const n=findNpc(a.commander); if(!n)return "驻守";
@@ -69,6 +97,10 @@ function resolveBattle(a,b){
  const loss=Math.max(2,Math.round(loser.size*(.12+Math.random()*.12)));
  loser.size=Math.max(5,loser.size-loss);loser.morale=Math.max(0,loser.morale-12);
  winner.morale=Math.max(0,winner.morale-5);winner.supply=Math.max(0,winner.supply-10);
+ const wn=findNpc(winner.commander),ln=findNpc(loser.commander);
+ if(wn){wn.traits.ambition=Math.min(100,wn.traits.ambition+2);wn.memory=(wn.memory||[]);wn.memory.unshift("第"+turn+"回合：在"+cities.find(c=>c.id===winner.location)?.name+"取胜，军中声望上升。");wn.memory=wn.memory.slice(0,6);}
+ if(ln){ln.traits.loyalty=Math.max(0,ln.traits.loyalty-3);ln.memory=(ln.memory||[]);ln.memory.unshift("第"+turn+"回合：战败，开始重新评估盟友与自身处境。");ln.memory=ln.memory.slice(0,6);}
+ world.prestige=Math.max(0,Math.min(100,world.prestige+(winner.owner==="后周"?1:-1)));
  battles.unshift({turn,name:a.name+" vs "+b.name,winner:winner.name,detail:"胜负由兵力、士气、粮道与主将性格共同决定"});
  addLog("【战斗】"+winner.name+"击退"+loser.name+"。"+loser.name+"损失约"+loss+"队兵力。");
 }
@@ -215,7 +247,7 @@ function loadGame(){
  const raw=localStorage.getItem("gameKingsSave");if(!raw){addLog("【存档】尚未找到可恢复的局势。");return;}
  try{const s=JSON.parse(raw);Object.assign(world,s.world);turn=s.turn;day=s.day;logs.splice(0,logs.length,...s.logs);npcs.splice(0,npcs.length,...s.npcs);seed=s.seed||927;addLog("【存档】旧日局势重新浮现。");renderAll();}catch(e){addLog("【存档】存档损坏，已保留当前局势。");}
 }
-function nextTurn(){turn++;day++;autonomous();factionTurn();armyTurn();warTurn();worldEvent();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
+function nextTurn(){turn++;day++;autonomous();factionTurn();armyTurn();warTurn();politicalTurn();worldEvent();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
 function playerAction(a){
 const n=npcs.find(x=>x.id===selected);if(!n)return;
 if(a==="赏赐"){n.trust=Math.min(100,n.trust+12);world.grain=Math.max(0,world.grain-5);addLog("赵匡胤赏赐"+n.name+"，但对方究竟把这当成恩义，还是把它看成一次交易？");}
@@ -229,7 +261,7 @@ function renderFactions(){
 function renderWorld(){$("world").innerHTML=[["粮草",world.grain],["军心",world.morale],["威望",world.prestige],["天下紧张",world.tension]].map(x=>`<div class="stat"><b>${x[1]}</b><span>${x[0]}</span></div>`).join("")}
 function renderNpcs(){$("npcs").innerHTML=npcs.map(n=>`<div class="npc ${selected===n.id?"active":""}" onclick="selected='${n.id}';renderNpcs();renderDetail()"><div class="npc-top"><strong>${n.name}</strong><span class="tag">${n.faction} · ${n.role}</span></div><div class="tag">${n.personality}</div><div class="meter"><i style="width:${n.trust}%"></i></div></div>`).join("")}
 function renderLog(){$("log").innerHTML=logs.map(l=>`<div class="event"><div class="turn">第 ${l.turn} 回合</div><p>${l.text}</p></div>`).join("")}
-function renderAll(){renderWorld();renderFactions();renderCities();renderBattles();renderNpcs();renderLog();renderDetail();}
+function renderAll(){renderWorld();renderFactions();renderCities();renderBattles();renderCrisis();renderNpcs();renderLog();renderDetail();}
 function renderDetail(){let n=npcs.find(x=>x.id===selected);$("detail").innerHTML=`<div class="big">${n.name}</div><div class="tag">${n.faction} · ${n.role}</div><div class="quote">“${n.quote}”</div><p><b>性格：</b>${n.personality}</p><p><b>当前目标：</b>${n.goal}</p><p><b>对你的信任：</b>${n.trust}/100</p><p><b>最近记忆：</b>${n.memory&&n.memory.length?n.memory[0]:"暂无"}</p><div class="stats">${Object.entries(n.traits).map(([k,v])=>`<div class="stat"><b>${v}</b><span>${({ambition:"野心",loyalty:"忠诚",greed:"贪欲",courage:"勇气",caution:"谨慎"})[k]}</span></div>`).join("")}</div><div class="actions"><button onclick="playerAction('赏赐')">赏赐</button><button onclick="playerAction('试探')">试探</button><button onclick="playerAction('拉拢')">拉拢</button><button onclick="playerAction('施压')">施压</button></div>`}
 addLog("天下风雨未定。赵匡胤开始观察身边每一个人的选择。");renderAll();
 </script>
