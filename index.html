@@ -41,7 +41,7 @@ const npcs=[
 {id:"liu",name:"刘承祐",faction:"后汉",role:"旧部势力",personality:"急躁、敏感、缺乏安全感",traits:{ambition:70,loyalty:52,greed:44,courage:48,caution:39},goal:"保住自己的势力与性命",trust:27,quote:"别人都在等我倒下。"},
 {id:"nan",name:"南唐使者",faction:"南唐",role:"使者",personality:"圆滑、谨慎、机会主义",traits:{ambition:61,loyalty:58,greed:67,courage:31,caution:91},goal:"探清后周底线，争取喘息时间",trust:35,quote:"刀兵之外，总还有一条路。"}
 ];
-let selected="zhao",turn=1;
+let selected="zhao",turn=1,day=1,chronicle=[];
 let world={grain:62,morale:58,prestige:43,tension:51};
 const logs=[];
 const $=id=>document.getElementById(id);
@@ -66,6 +66,23 @@ function chooseTarget(n){
  const candidates=npcs.filter(x=>x.id!==n.id);
  candidates.sort((a,b)=>Math.abs(relation(n,b))-Math.abs(relation(n,a)));
  return candidates[Math.floor(Math.random()*Math.min(4,candidates.length))];
+}
+function worldEvent(){
+ const r=Math.random();
+ if(r<.18){
+  const n=npcs.filter(x=>x.id!=="zhao")[Math.floor(Math.random()*7)];
+  n.trust=Math.max(0,n.trust-5);world.tension=Math.min(100,world.tension+6);
+  n.memory=n.memory||[];n.memory.unshift("第"+turn+"回合遭遇流言");
+  addLog("【流言】"+n.name+"听到有人在暗中议论自己。"+n.name+"开始重新评估身边的人。");
+ }else if(r<.34){
+  world.grain=Math.min(100,world.grain+5);
+  addLog("【粮道】一批粮草抵达，暂时缓解了军中的压力。");
+ }else if(r<.48){
+  const a=npcs.filter(x=>x.id!=="zhao")[Math.floor(Math.random()*7)];
+  const b=npcs.filter(x=>x.id!==a.id)[Math.floor(Math.random()*7)];
+  changeRelation(a,b,Math.random()<.5?8:-8);
+  addLog("【耳目】"+a.name+"与"+b.name+"之间出现了一次私下接触，外人不知道他们谈了什么。");
+ }
 }
 function autonomous(){
  npcs.filter(n=>n.id!=="zhao").forEach(n=>{
@@ -98,7 +115,7 @@ function autonomous(){
  });
 }
 function addLog(text){logs.unshift({turn,text});renderLog()}
-function nextTurn(){turn++;autonomous();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
+function nextTurn(){turn++;day++;autonomous();worldEvent();if(Math.random()<.35){world.tension=Math.min(100,world.tension+7);addLog("边地传来军情：新的传闻正在各势力之间流动。");}if(world.grain<20){world.morale=Math.max(0,world.morale-3);addLog("粮草告急，军中士气开始下降。");}if(world.tension>80){world.morale=Math.max(0,world.morale-2);addLog("天下紧张度过高，各方开始把最坏的可能当成真相。");}renderWorld();renderNpcs();renderDetail()}
 function playerAction(a){
 const n=npcs.find(x=>x.id===selected);if(!n)return;
 if(a==="赏赐"){n.trust=Math.min(100,n.trust+12);world.grain=Math.max(0,world.grain-5);addLog("赵匡胤赏赐"+n.name+"，但对方究竟把这当成恩义，还是把它看成一次交易？");}
